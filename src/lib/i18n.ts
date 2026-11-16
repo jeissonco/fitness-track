@@ -5,7 +5,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { ES_EXERCISE_NAMES, ES_EQUIPMENT, ES_LEVEL, ES_MUSCLES } from './exercise-es';
-import type { CardioKind, TemplateKey } from './fitness';
+import type { CardioKind, ScoreUnit, TemplateKey } from './fitness';
 import { LANG_KEY } from './head-scripts';
 import { findPlanWorkout, type PlanCategory, type PlanEquipment, type PlanGoal, type PlanLevel } from './plans';
 
@@ -25,6 +25,7 @@ const en = {
   kind: (k: CardioKind): string => k,
   template: { push: 'Push day', pull: 'Pull day', legs: 'Leg day', dumbbell: 'Dumbbell full body' } as Record<TemplateKey, string>,
   session: 'Session',
+  unit: { kg: 'kg', reps: 'reps', s: 's' } as Record<ScoreUnit, string>,
 
   langToggle: 'Language: English. Cambiar a español',
   themeToggle: 'Toggle light and dark theme',
@@ -77,6 +78,8 @@ const en = {
     inProgress: (done: number, total: number) => `In progress · ${done}/${total} sets`,
     howTo: (name: string) => `How to do ${name}`,
     best: (kg: number) => `Best ${kg} kg e1RM`,
+    bestCount: (n: number, unit: string) => `Best ${n} ${unit}`,
+    bw: 'BW',
     firstTime: 'First time',
     setsOf: (name: string) => `${name} sets`,
     colSet: 'Set', colPrev: 'Previous', colKg: 'kg', colReps: 'Reps', colDone: 'Done',
@@ -96,6 +99,7 @@ const en = {
     finish: 'Finish',
     needWeightReps: 'Enter weight and reps first',
     newPR: (name: string, kg: string, reps: number) => `New PR! ${name} ${kg} × ${reps}`,
+    newPRCount: (name: string, n: number, unit: string) => `New PR! ${name} ${n} ${unit}`,
     tickOne: 'Tick at least one set to finish',
     saved: (tonnes: string, prs: number) => `Workout saved · ${tonnes} t lifted${prs ? ` · ${plural(prs, 'PR', 'PRs')}` : ''}`,
   },
@@ -169,6 +173,9 @@ const en = {
     e1rm: 'e1RM',
     kgE1rm: 'kg e1RM',
     gain: (kg: string, n: number) => `+${kg} kg in ${n} sessions`,
+    gainCount: (n: number, unit: string, sessions: number) => `+${n} ${unit} in ${sessions} sessions`,
+    bestSet: 'best set',
+    unitWords: { kg: 'kilograms', reps: 'reps', s: 'seconds' } as Record<ScoreUnit, string>,
     sessions: 'Sessions',
     topSet: 'Top set',
     distance: 'Distance',
@@ -176,7 +183,7 @@ const en = {
     perWeek: 'Minutes per week',
     sixWeeks: '6 wks',
     thisWeek: 'This wk',
-    chartAria: (from: number, to: number) => `Estimated one rep max from ${from} to ${to} kilograms`,
+    chartAria: (from: number, to: number, unit: string) => `Best set from ${from} to ${to} ${unit}`,
   },
 
   howto: {
@@ -239,6 +246,7 @@ const es: Dict = {
   kind: (k) => ({ Run: 'Correr', Bike: 'Bici', Row: 'Remo', Walk: 'Caminar', Swim: 'Nadar', Other: 'Otro' })[k],
   template: { push: 'Día de empuje', pull: 'Día de tirón', legs: 'Día de pierna', dumbbell: 'Cuerpo completo con mancuernas' },
   session: 'Sesión',
+  unit: { kg: 'kg', reps: 'reps', s: 's' },
 
   langToggle: 'Idioma: español. Switch to English',
   themeToggle: 'Cambiar entre tema claro y oscuro',
@@ -291,6 +299,8 @@ const es: Dict = {
     inProgress: (done, total) => `En curso · ${done}/${total} series`,
     howTo: (name) => `Cómo hacer ${name}`,
     best: (kg) => `Mejor ${kg} kg 1RM est.`,
+    bestCount: (n, unit) => `Mejor ${n} ${unit}`,
+    bw: 'PC',
     firstTime: 'Primera vez',
     setsOf: (name) => `Series de ${name}`,
     colSet: 'Serie', colPrev: 'Anterior', colKg: 'kg', colReps: 'Reps', colDone: 'Hecha',
@@ -310,6 +320,7 @@ const es: Dict = {
     finish: 'Terminar',
     needWeightReps: 'Primero escribe el peso y las repeticiones',
     newPR: (name, kg, reps) => `¡Nuevo récord! ${name} ${kg} × ${reps}`,
+    newPRCount: (name, n, unit) => `¡Nuevo récord! ${name} ${n} ${unit}`,
     tickOne: 'Marca al menos una serie para terminar',
     saved: (tonnes, prs) => `Entrenamiento guardado · ${tonnes} t levantadas${prs ? ` · ${plural(prs, 'récord', 'récords')}` : ''}`,
   },
@@ -383,6 +394,9 @@ const es: Dict = {
     e1rm: '1RM est.',
     kgE1rm: 'kg 1RM est.',
     gain: (kg, n) => `+${kg} kg en ${n} sesiones`,
+    gainCount: (n, unit, sessions) => `+${n} ${unit} en ${sessions} sesiones`,
+    bestSet: 'mejor serie',
+    unitWords: { kg: 'kilos', reps: 'repeticiones', s: 'segundos' },
     sessions: 'Sesiones',
     topSet: 'Mejor serie',
     distance: 'Distancia',
@@ -390,7 +404,7 @@ const es: Dict = {
     perWeek: 'Minutos por semana',
     sixWeeks: '6 sem',
     thisWeek: 'Esta sem',
-    chartAria: (from, to) => `1RM estimado de ${from} a ${to} kilos`,
+    chartAria: (from, to, unit) => `Mejor serie de ${from} a ${to} ${unit}`,
   },
 
   howto: {

@@ -1,4 +1,5 @@
 import type { PlanProgress } from './plans';
+import { EXERCISE_INFO } from './exercise-info';
 
 /* Domain model, templates, date helpers and derived stats.
  * Pure functions only — no React, no storage — so they can move to the server later. */
@@ -115,6 +116,19 @@ const r05 = (x: number) => Math.round(x * 2) / 2;
 /** Epley estimated one-rep max. */
 export const e1rm = (kg: number, reps: number) => (kg > 0 && reps > 0 ? (reps === 1 ? kg : kg * (1 + reps / 30)) : 0);
 
+/* Bodyweight exercises (pull-ups, push-ups, planks…) have no weight to estimate a 1RM from,
+ * so their progress is the best set's reps, or seconds for holds. */
+const HOLDS = new Set(['Plank', 'Side Plank']);
+export const isBodyweight = (name: string) => EXERCISE_INFO[name]?.equipment === 'body only';
+export type ScoreUnit = 'kg' | 'reps' | 's';
+export const scoreUnit = (name: string): ScoreUnit => (HOLDS.has(name) ? 's' : isBodyweight(name) ? 'reps' : 'kg');
+/** One set's score: estimated 1RM in kg for weighted lifts, reps (or seconds) for bodyweight. */
+export const setScore = (name: string, kg: number, reps: number) =>
+  scoreUnit(name) === 'kg' ? e1rm(+kg || 0, +reps || 0) : Math.max(0, +reps || 0);
+/** Weight as typed into a set: blank for bodyweight sets done without added weight. */
+const kgInput = (name: string, kg: number | null | undefined) =>
+  kg == null || Number.isNaN(kg) || (kg === 0 && isBodyweight(name)) ? '' : String(kg);
+
 /* ---------------- Sample data ---------------- */
 function rng(seed: number) {
   return () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
@@ -150,10 +164,10 @@ export function seedData(): AppState {
 export const emptyState = (): AppState => ({ workouts: [], cardio: [], active: null, rotation: 0, plan: null, demo: false });
 
 /* ---------------- Derived ---------------- */
-export function topSet(sets: { kg: number; reps: number }[]) {
+export function topSet(name: string, sets: { kg: number; reps: number }[]) {
   let best = 0, top: SetEntry | null = null;
   for (const s of sets) {
-    const v = e1rm(+s.kg, +s.reps);
+    const v = setScore(name, s.kg, s.reps);
     if (v > best) { best = v; top = s; }
   }
   return { best, top };
@@ -162,11 +176,12 @@ export function exHistory(state: AppState, name: string) {
   return state.workouts.flatMap((w) => {
     const ex = w.exercises.find((e) => e.name === name);
     if (!ex) return [];
-    const t = topSet(ex.sets);
+    const t = topSet(name, ex.sets);
     return t.best && t.top ? [{ date: w.date, best: t.best, top: t.top }] : [];
   });
 }
-export const bestE1rm = (state: AppState, name: string) => Math.max(0, ...exHistory(state, name).map((h) => h.best));
+/** Best score ever logged for an exercise (see setScore). */
+export const bestScore = (state: AppState, name: string) => Math.max(0, ...exHistory(state, name).map((h) => h.best));
 export function lastSets(state: AppState, name: string): SetEntry[] | null {
   for (let i = state.workouts.length - 1; i >= 0; i--) {
     const ex = state.workouts[i].exercises.find((e) => e.name === name);
@@ -174,14 +189,14 @@ export function lastSets(state: AppState, name: string): SetEntry[] | null {
   }
   return null;
 }
-export const volume = (w: Workout) => w.exercises.reduce((a, ex) => a + ex.sets.reduce((b, s) => b + s.kg * s.reps, 0), 0);
+export const volume = (w: Workout) => w.exercises.reduce((a, ex) => a + ex.sets.reduce((b, s) => b + (s.kg || 0) * (s.reps || 0), 0), 0);
 export function recentPRs(state: AppState, limit = 3) {
   const best: Record<string, number> = {};
-  const prs: { date: string; name: string; kg: number; reps: number; e: number; gain: number }[] = [];
+  const prs: { date: string; name: string; kg: number; reps: number; e: number; gain: number; unit: ScoreUnit }[] = [];
   for (const w of state.workouts)
     for (const ex of w.exercises) {
-      const t = topSet(ex.sets), prev = best[ex.name];
-      if (prev && t.top && t.best > prev + 0.01) prs.push({ date: w.date, name: ex.name, kg: t.top.kg, reps: t.top.reps, e: t.best, gain: t.best - prev });
+      const t = topSet(ex.name, ex.sets), prev = best[ex.name];
+      if (prev && t.top && t.best > prev + 0.01) prs.push({ date: w.date, name: ex.name, kg: t.top.kg, reps: t.top.reps, e: t.best, gain: t.best - prev, unit: scoreUnit(ex.name) });
       if (t.best > (prev || 0)) best[ex.name] = t.best;
     }
   return prs.slice(-limit).reverse();
@@ -205,7 +220,7 @@ export function newPlanExercise(state: AppState, name: string, sets: number, tar
     name, target,
     sets: Array.from({ length: sets }, (_, i) => {
       const p = prev?.[Math.min(i, prev.length - 1)];
-      return { kg: p ? String(p.kg) : '', reps: String(p?.reps ?? (low || '')), done: false, pr: false };
+      return { kg: kgInput(name, p?.kg), reps: String(p?.reps ?? (low || '')), done: false, pr: false };
     }),
   };
 }
@@ -213,5 +228,5 @@ export function newPlanExercise(state: AppState, name: string, sets: number, tar
 export function newActiveExercise(state: AppState, name: string): ActiveExercise {
   const prev = lastSets(state, name);
   const base = prev ?? [{ kg: '', reps: '' }, { kg: '', reps: '' }, { kg: '', reps: '' }];
-  return { name, sets: base.map((s) => ({ kg: String(s.kg), reps: String(s.reps), done: false, pr: false })) };
+  return { name, sets: base.map((s) => ({ kg: typeof s.kg === 'string' ? s.kg : kgInput(name, s.kg), reps: String(s.reps ?? ''), done: false, pr: false })) };
 }

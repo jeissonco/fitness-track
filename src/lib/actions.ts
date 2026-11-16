@@ -51,7 +51,7 @@ export function finishSession(): { tonnes: number; prs: number } | null {
   const a = getState().active;
   if (!a) return null;
   const exercises = a.exercises
-    .map((ex) => ({ name: ex.name, sets: ex.sets.filter((s) => s.done).map((s) => ({ kg: parseFloat(s.kg), reps: parseInt(s.reps, 10) })) }))
+    .map((ex) => ({ name: ex.name, sets: ex.sets.filter((s) => s.done).map((s) => ({ kg: parseFloat(s.kg) || 0, reps: parseInt(s.reps, 10) || 0 })) }))
     .filter((ex) => ex.sets.length);
   if (!exercises.length) return null;
   const w: Workout = {

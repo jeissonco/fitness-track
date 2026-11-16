@@ -8,7 +8,7 @@ import { planStatus, targetLow } from '@/lib/plans';
 import Link from 'next/link';
 import { t as text, useT, workoutName } from '@/lib/i18n';
 import { EXERCISE_INFO } from '@/lib/exercise-info';
-import { type ActiveWorkout, LIBRARY, SESSIONS, TEMPLATES, bestE1rm, e1rm, kgFmt, lastSets, newActiveExercise, nextTemplate, pad, restSecondsFor } from '@/lib/fitness';
+import { type ActiveWorkout, LIBRARY, SESSIONS, TEMPLATES, bestScore, isBodyweight, kgFmt, lastSets, newActiveExercise, nextTemplate, pad, restSecondsFor, scoreUnit, setScore } from '@/lib/fitness';
 import { Icon } from '../icons';
 import { toast } from '../toast';
 import { hasHowto, openHowto } from '../howto-sheet';
@@ -175,13 +175,13 @@ export function TrainView() {
       return;
     }
     // A blank weight on a bodyweight exercise (push-up, plank…) counts as 0 kg.
-    const bodyweight = EXERCISE_INFO[ex.name]?.equipment === 'body only';
+    const bodyweight = isBodyweight(ex.name);
     const kg = st.kg.trim() === '' && bodyweight ? 0 : parseFloat(st.kg), reps = parseInt(st.reps, 10);
     if (!(kg >= 0) || !(reps > 0)) { toast(tr.needWeightReps); return; }
-    const v = e1rm(kg, reps);
-    const best = Math.max(bestE1rm(state, ex.name), ...ex.sets.filter((x, k) => k !== j && x.done).map((x) => e1rm(+x.kg, +x.reps)));
+    const v = setScore(ex.name, kg, reps);
+    const best = Math.max(bestScore(state, ex.name), ...ex.sets.filter((x, k) => k !== j && x.done).map((x) => setScore(ex.name, parseFloat(x.kg) || 0, parseInt(x.reps, 10))));
     const pr = best > 0 && v > best + 0.01;
-    if (pr) toast(tr.newPR(t.ex(ex.name), kgFmt(kg), reps), true);
+    if (pr) toast(scoreUnit(ex.name) === 'kg' ? tr.newPR(t.ex(ex.name), kgFmt(kg), reps) : tr.newPRCount(t.ex(ex.name), reps, t.unit[scoreUnit(ex.name)]), true);
     const secs = restSecondsFor(ex.name);
     update((s) => {
       const x = s.active!.exercises[i].sets[j];
@@ -218,7 +218,8 @@ export function TrainView() {
 
       <div className="space-y-4">
         {a.exercises.map((ex, i) => {
-          const best = bestE1rm(state, ex.name), prev = lastSets(state, ex.name) ?? [], name = t.ex(ex.name);
+          const best = bestScore(state, ex.name), prev = lastSets(state, ex.name) ?? [], name = t.ex(ex.name);
+          const unit = scoreUnit(ex.name), bw = isBodyweight(ex.name);
           return (
             <article key={`${i}-${ex.name}`} className="card">
               <header className="mb-3 flex items-baseline justify-between gap-2">
@@ -230,7 +231,7 @@ export function TrainView() {
                   ) : name}
                 </h2>
                 <span className="flex flex-none items-center gap-1 text-sm text-muted-foreground tabular-nums">
-                  {best ? tr.best(Math.round(best)) : tr.firstTime}
+                  {best ? (unit === 'kg' ? tr.best(Math.round(best)) : tr.bestCount(best, t.unit[unit])) : tr.firstTime}
                   <button
                     className="-mr-2 grid size-[var(--tap)] place-items-center rounded-full hover:bg-secondary hover:text-foreground"
                     onClick={() => removeExercise(i)}
@@ -251,10 +252,10 @@ export function TrainView() {
                   <div key={j} role="row" className={`${cols} rounded-md p-1 transition-colors ${s.done ? 'bg-[color-mix(in_srgb,var(--strength)_14%,transparent)]' : ''}`}>
                     <span role="cell" className="text-center font-display text-lg font-extrabold tabular-nums">{j + 1}</span>
                     <span role="cell" className="text-sm text-muted-foreground tabular-nums">
-                      {prev[j] ? `${kgFmt(prev[j].kg)} × ${prev[j].reps}` : '—'}
+                      {prev[j] ? `${bw && !prev[j].kg ? tr.bw : kgFmt(prev[j].kg)} × ${prev[j].reps}` : '—'}
                       {s.pr && <span className="pr-tag">PR</span>}
                     </span>
-                    <input role="cell" className={`${input} ${s.done ? 'bg-transparent' : 'bg-muted'}`} inputMode="decimal" value={s.kg} onChange={(e) => setField(i, j, 'kg', e.target.value)} aria-label={tr.setWeight(j + 1)} />
+                    <input role="cell" className={`${input} ${s.done ? 'bg-transparent' : 'bg-muted'}`} inputMode="decimal" value={s.kg} placeholder={bw ? tr.bw : undefined} onChange={(e) => setField(i, j, 'kg', e.target.value)} aria-label={tr.setWeight(j + 1)} />
                     <input role="cell" className={`${input} ${s.done ? 'bg-transparent' : 'bg-muted'}`} inputMode="numeric" value={s.reps} placeholder={ex.target ? String(targetLow(ex.target) || '') : undefined} onChange={(e) => setField(i, j, 'reps', e.target.value)} aria-label={tr.setReps(j + 1)} />
                     <span role="cell">
                     <button

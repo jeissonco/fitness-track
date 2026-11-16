@@ -138,10 +138,10 @@ export function TodayView() {
                   <span className="grid size-10 flex-none place-items-center rounded-xl bg-[color-mix(in_srgb,var(--strength)_18%,transparent)] text-primary-ink"><Icon name="trophy" /></span>
                   <div className="min-w-0 flex-1">
                     <div className="font-bold">{t.ex(p.name)}</div>
-                    <div className="text-sm text-muted-foreground tabular-nums">{kgFmt(p.kg)} kg × {p.reps} · {fmtDate(p.date, t.dateLocale)}</div>
+                    <div className="text-sm text-muted-foreground tabular-nums">{p.unit === 'kg' ? `${kgFmt(p.kg)} kg × ${p.reps}` : `${p.reps} ${t.unit[p.unit]}`} · {fmtDate(p.date, t.dateLocale)}</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-display text-[1.375rem] font-extrabold tabular-nums">{Math.round(p.e)} kg</div>
+                    <div className="font-display text-[1.375rem] font-extrabold tabular-nums">{Math.round(p.e)} {t.unit[p.unit]}</div>
                     <div className="text-sm font-bold text-success tabular-nums">+{kgFmt(p.gain)}</div>
                   </div>
                 </li>

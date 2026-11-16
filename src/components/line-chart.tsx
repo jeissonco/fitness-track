@@ -1,10 +1,10 @@
 'use client';
 
-import { fmtDate } from '@/lib/fitness';
+import { type ScoreUnit, fmtDate } from '@/lib/fitness';
 import { useT } from '@/lib/i18n';
 
-/** Small SVG area/line chart for estimated 1RM over time. */
-export function LineChart({ pts }: { pts: { date: string; y: number }[] }) {
+/** Small SVG area/line chart of the best set over time (estimated 1RM, reps or seconds). */
+export function LineChart({ pts, unit = 'kg' }: { pts: { date: string; y: number }[]; unit?: ScoreUnit }) {
   const t = useT();
   const W = 320, H = 170, L = 6, R = 6, T = 22, B = 22;
   const ys = pts.map((p) => p.y);
@@ -21,7 +21,7 @@ export function LineChart({ pts }: { pts: { date: string; y: number }[] }) {
       className="block h-auto w-full text-chart-1"
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label={t.progress.chartAria(Math.round(pts[0].y), Math.round(pts[last].y))}
+      aria-label={t.progress.chartAria(Math.round(pts[0].y), Math.round(pts[last].y), t.progress.unitWords[unit])}
     >
       {[0, 0.5, 1].map((f) => (
         <line key={f} x1={0} x2={W} y1={T + f * (H - T - B)} y2={T + f * (H - T - B)} stroke="var(--border)" strokeWidth={1} />
@@ -30,7 +30,7 @@ export function LineChart({ pts }: { pts: { date: string; y: number }[] }) {
       <path d={d} fill="none" stroke="currentColor" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
       {pts.map((p, i) => (
         <circle key={i} cx={x(i)} cy={y(p.y)} r={i === last ? 5 : 2.5} fill={i === last ? 'currentColor' : 'var(--card)'} stroke="currentColor" strokeWidth={2}>
-          <title>{`${fmtDate(p.date, t.dateLocale)}: ${Math.round(p.y)} kg`}</title>
+          <title>{`${fmtDate(p.date, t.dateLocale)}: ${Math.round(p.y)} ${t.unit[unit]}`}</title>
         </circle>
       ))}
       <text x={Math.min(x(last), W - 4)} y={y(pts[last].y) - 10} textAnchor="end" className="fill-foreground font-display text-[13px] font-extrabold">

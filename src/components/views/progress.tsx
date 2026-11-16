@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAppState } from '@/lib/store';
-import { addDays, exHistory, fmtDate, iso, kgFmt, weekStart } from '@/lib/fitness';
+import { addDays, exHistory, fmtDate, iso, kgFmt, scoreUnit, weekStart } from '@/lib/fitness';
 import { useT } from '@/lib/i18n';
 import { LineChart } from '../line-chart';
 import { PageSkeleton } from './skeleton';
@@ -34,6 +34,7 @@ export function ProgressView() {
     const ex = names.includes(picked) ? picked : names[0];
     const h = ex ? exHistory(state, ex) : [];
     const delta = h.length > 1 ? h[h.length - 1].best - h[0].best : 0;
+    const unit = ex ? scoreUnit(ex) : 'kg', byKg = unit === 'kg';
     return (
       <>
         <h1 className="display mb-5 text-5xl">{tp.title}</h1>
@@ -52,10 +53,10 @@ export function ProgressView() {
                   <>
                     <div className="my-3 flex items-end gap-3">
                       <b className="font-display text-[4rem] font-extrabold leading-[.85] text-primary-ink tabular-nums">{Math.round(h[h.length - 1].best)}</b>
-                      <small className="font-display text-[1.375rem] font-bold text-muted-foreground">{tp.kgE1rm}</small>
-                      {delta > 0 && <span className="ml-auto text-sm font-bold text-success tabular-nums">{tp.gain(kgFmt(delta), h.length)}</span>}
+                      <small className="font-display text-[1.375rem] font-bold text-muted-foreground">{byKg ? tp.kgE1rm : `${t.unit[unit]} · ${tp.bestSet}`}</small>
+                      {delta > 0 && <span className="ml-auto text-sm font-bold text-success tabular-nums">{byKg ? tp.gain(kgFmt(delta), h.length) : tp.gainCount(delta, t.unit[unit], h.length)}</span>}
                     </div>
-                    <LineChart pts={h.map((p) => ({ date: p.date, y: p.best }))} />
+                    <LineChart pts={h.map((p) => ({ date: p.date, y: p.best }))} unit={unit} />
                   </>
                 )}
               </>
@@ -65,13 +66,13 @@ export function ProgressView() {
             <section className="card">
               <h2 className="section-title">{tp.sessions} <span className="eyebrow">{tp.topSet}</span></h2>
               <ul className="list-none p-0">
-                {h.slice(-6).reverse().map((p) => (
-                  <li key={p.date} className="flex items-center gap-3 border-t py-3 first:border-t-0 first:pt-0">
+                {h.slice(-6).reverse().map((p, i) => (
+                  <li key={`${p.date}-${i}`} className="flex items-center gap-3 border-t py-3 first:border-t-0 first:pt-0">
                     <div className="flex-1">
-                      <div className="font-bold tabular-nums">{kgFmt(p.top.kg)} kg × {p.top.reps}</div>
+                      <div className="font-bold tabular-nums">{byKg || p.top.kg ? `${kgFmt(p.top.kg)} kg × ${p.top.reps}` : `${p.top.reps} ${t.unit[unit]}`}</div>
                       <div className="text-sm text-muted-foreground">{fmtDate(p.date, t.dateLocale)}</div>
                     </div>
-                    <div className="font-display text-[1.375rem] font-extrabold tabular-nums">{Math.round(p.best)} <small className="text-sm text-muted-foreground">{tp.e1rm}</small></div>
+                    <div className="font-display text-[1.375rem] font-extrabold tabular-nums">{Math.round(p.best)} <small className="text-sm text-muted-foreground">{byKg ? tp.e1rm : t.unit[unit]}</small></div>
                   </li>
                 ))}
               </ul>

@@ -101,8 +101,11 @@ function scheduleFlush(ms: number) {
   flushTimer = setTimeout(() => void flush(), ms);
 }
 
-/** A network or expired-session error is worth retrying; a rejected row is not. */
-const retryable = (e: PostgrestError) => !navigator.onLine || !e.code || e.code.startsWith('PGRST3');
+/* Errors that mean the database is behind the app (a migration not run yet): keep the change
+ * and retry, so nothing is lost while the migration is applied. */
+const SCHEMA_BEHIND = new Set(['PGRST204', 'PGRST205', '42703', '42P01']);
+/** A network, expired-session or missing-migration error is worth retrying; a rejected row is not. */
+const retryable = (e: PostgrestError) => !navigator.onLine || !e.code || e.code.startsWith('PGRST3') || SCHEMA_BEHIND.has(e.code);
 
 /** Send queued writes in order. Resolves once the queue is empty or a send failed. */
 function flush(): Promise<void> {
