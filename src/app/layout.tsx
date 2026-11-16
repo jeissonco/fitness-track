@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow, Barlow_Condensed } from "next/font/google";
 import { TabBar } from "@/components/tab-bar";
-import { ThemeToggle, themeInitScript } from "@/components/theme-toggle";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Toaster } from "@/components/toast";
 import { HowtoSheet } from "@/components/howto-sheet";
 import { Icon } from "@/components/icons";
+import { AccountButton } from "@/components/account-button";
+import { LangToggle } from "@/components/lang-toggle";
+import { headInitScript } from "@/lib/head-scripts";
 import "./globals.css";
 
 const barlow = Barlow({
@@ -34,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable} h-full`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: headInitScript }} />
       </head>
       <body className="min-h-full">
         <div className="mx-auto max-w-[480px] px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(96px+env(safe-area-inset-bottom))]">
@@ -45,7 +48,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               </span>
               Fitness Track
             </div>
-            <ThemeToggle />
+            <div className="flex gap-2">
+              <LangToggle />
+              <ThemeToggle />
+              <AccountButton />
+            </div>
           </header>
           <main>{children}</main>
         </div>

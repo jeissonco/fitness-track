@@ -1,3 +1,5 @@
+import type { PlanProgress } from './plans';
+
 /* Domain model, templates, date helpers and derived stats.
  * Pure functions only — no React, no storage — so they can move to the server later. */
 
@@ -10,6 +12,8 @@ export interface Workout {
   name: string;
   durationMin: number;
   exercises: LoggedExercise[];
+  /** "planId/workoutKey" when done as part of a plan. */
+  plan?: string | null;
 }
 export type CardioKind = 'Run' | 'Bike' | 'Row' | 'Walk' | 'Swim' | 'Other';
 export interface CardioSession {
@@ -23,19 +27,29 @@ export interface CardioSession {
 }
 /** Sets in an in-progress workout keep raw input strings so half-typed values ("72.") survive. */
 export interface ActiveSet { kg: string; reps: string; done: boolean; pr: boolean }
-export interface ActiveExercise { name: string; sets: ActiveSet[] }
+export interface ActiveExercise {
+  name: string;
+  sets: ActiveSet[];
+  /** Plan target per set, e.g. "8-12" or "30-45s". */
+  target?: string;
+}
 export interface ActiveWorkout {
   template: TemplateKey | null;
   name: string;
-  start: number;
+  /** When the clock started: the first ticked set or the Start button. Null while still planning. */
+  start: number | null;
   exercises: ActiveExercise[];
   rest: { end: number; total: number } | null;
+  /** "planId/workoutKey" when started from a plan. */
+  plan?: string | null;
 }
 export interface AppState {
   workouts: Workout[];
   cardio: CardioSession[];
   active: ActiveWorkout | null;
   rotation: number;
+  /** The plan being followed, if any. */
+  plan?: PlanProgress | null;
   /** True while the account still holds generated sample history. */
   demo?: boolean;
 }
@@ -46,12 +60,30 @@ export const TEMPLATES = {
   push: { name: 'Push day', ex: [['Bench Press', 80, 5, 1.25], ['Overhead Press', 47.5, 5, 0.5], ['Incline DB Press', 26, 10, 0.25], ['Triceps Pushdown', 30, 12, 0.25]] as TemplateExercise[] },
   pull: { name: 'Pull day', ex: [['Deadlift', 140, 5, 2.5], ['Barbell Row', 70, 8, 1], ['Lat Pulldown', 60, 10, 0.5], ['Biceps Curl', 14, 12, 0.2]] as TemplateExercise[] },
   legs: { name: 'Leg day', ex: [['Back Squat', 110, 5, 2], ['Romanian Deadlift', 90, 8, 1], ['Leg Press', 180, 10, 2.5], ['Calf Raise', 80, 12, 1]] as TemplateExercise[] },
+  /** Not in the push/pull/legs rotation: offered on its own for home or dumbbell-only training. */
+  dumbbell: { name: 'Dumbbell full body', ex: [['Dumbbell Bench Press', 26, 10, 0.5], ['One-Arm Dumbbell Row', 28, 10, 0.5], ['Goblet Squat', 24, 12, 0.5], ['Dumbbell Romanian Deadlift', 22, 10, 0.5], ['Dumbbell Shoulder Press', 16, 10, 0.25], ['Hammer Curl', 12, 12, 0.2]] as TemplateExercise[] },
 };
 export type TemplateKey = keyof typeof TEMPLATES;
+/** The rotation suggested as "Next up". */
 export const ORDER: TemplateKey[] = ['push', 'pull', 'legs'];
-const EXTRA = ['Pull-up', 'Front Squat', 'Hip Thrust', 'Lateral Raise', 'Face Pull', 'Dumbbell Lunge', 'Chest Fly', 'Hammer Curl'];
-export const LIBRARY = [...new Set([...ORDER.flatMap((k) => TEMPLATES[k].ex.map((e) => e[0])), ...EXTRA])].sort();
-const COMPOUND = new Set(['Bench Press', 'Overhead Press', 'Deadlift', 'Barbell Row', 'Back Squat', 'Romanian Deadlift', 'Front Squat', 'Hip Thrust', 'Pull-up']);
+/** Every session offered on the Train screen. */
+export const SESSIONS: TemplateKey[] = [...ORDER, 'dumbbell'];
+const EXTRA = [
+  'Pull-up', 'Chin-up', 'Front Squat', 'Hip Thrust', 'Lateral Raise', 'Face Pull', 'Dumbbell Lunge', 'Chest Fly', 'Hammer Curl',
+  'Incline Bench Press', 'Dips', 'Push-up', 'Seated Cable Row', 'Leg Extension', 'Leg Curl', 'Hanging Leg Raise', 'Cable Crunch',
+  'Dumbbell Bench Press', 'Dumbbell Floor Press', 'Dumbbell Shoulder Press', 'Arnold Press', 'One-Arm Dumbbell Row', 'Dumbbell Pullover',
+  'Goblet Squat', 'Dumbbell Squat', 'Dumbbell Romanian Deadlift', 'Dumbbell Split Squat', 'Dumbbell Reverse Lunge', 'Dumbbell Step-up',
+  'Dumbbell Calf Raise', 'Front Raise', 'Rear Delt Fly', 'Dumbbell Shrug', 'Overhead Triceps Extension', 'Triceps Kickback',
+  'Concentration Curl', 'Incline Dumbbell Curl',
+  'Glute Bridge', 'Hip Abduction', 'Cable Kickback', 'Back Extension', 'Standing Hip Abduction', 'Single-leg Romanian Deadlift',
+  'Walking Lunge', 'Plank', 'Side Plank', 'Dead Bug',
+];
+export const LIBRARY = [...new Set([...SESSIONS.flatMap((k) => TEMPLATES[k].ex.map((e) => e[0])), ...EXTRA])].sort();
+const COMPOUND = new Set([
+  'Bench Press', 'Overhead Press', 'Deadlift', 'Barbell Row', 'Back Squat', 'Romanian Deadlift', 'Front Squat', 'Hip Thrust', 'Pull-up',
+  'Chin-up', 'Incline Bench Press', 'Dips', 'Leg Press', 'Dumbbell Bench Press', 'Dumbbell Shoulder Press', 'Goblet Squat', 'Dumbbell Squat',
+  'Dumbbell Romanian Deadlift', 'Dumbbell Split Squat',
+]);
 export const restSecondsFor = (name: string) => (COMPOUND.has(name) ? 150 : 90);
 export const CARDIO_KINDS: CardioKind[] = ['Run', 'Bike', 'Row', 'Walk', 'Swim', 'Other'];
 
@@ -64,7 +96,8 @@ export const parseIso = (s: string) => {
   const [y, m, d] = s.split('-').map(Number);
   return new Date(y, m - 1, d);
 };
-export const fmtDate = (s: string) => parseIso(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+/** `locale` undefined uses the device's format. */
+export const fmtDate = (s: string, locale?: string) => parseIso(s).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 export const weekStart = (d: Date) => {
   const x = startOfDay(d);
   return addDays(x, -((x.getDay() + 6) % 7));
@@ -114,7 +147,7 @@ export function seedData(): AppState {
   }
   return { workouts, cardio, active: null, rotation: n, demo: true };
 }
-export const emptyState = (): AppState => ({ workouts: [], cardio: [], active: null, rotation: 0, demo: false });
+export const emptyState = (): AppState => ({ workouts: [], cardio: [], active: null, rotation: 0, plan: null, demo: false });
 
 /* ---------------- Derived ---------------- */
 export function topSet(sets: { kg: number; reps: number }[]) {
@@ -163,6 +196,19 @@ export function weekStreak(state: AppState) {
   }
 }
 export const nextTemplate = (state: AppState): TemplateKey => ORDER[(state.rotation || 0) % ORDER.length];
+
+/** An exercise from a plan: the plan's set count, last session's weight, reps from the target (or last time). */
+export function newPlanExercise(state: AppState, name: string, sets: number, target: string): ActiveExercise {
+  const prev = lastSets(state, name);
+  const low = parseInt(target, 10) || 0;
+  return {
+    name, target,
+    sets: Array.from({ length: sets }, (_, i) => {
+      const p = prev?.[Math.min(i, prev.length - 1)];
+      return { kg: p ? String(p.kg) : '', reps: String(p?.reps ?? (low || '')), done: false, pr: false };
+    }),
+  };
+}
 
 export function newActiveExercise(state: AppState, name: string): ActiveExercise {
   const prev = lastSets(state, name);
